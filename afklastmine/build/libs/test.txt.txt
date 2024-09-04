@@ -1,0 +1,649 @@
+#**
+#----------------------------------------------------------------------------------------------------
+# Traitement    : ZEXPN2F.src
+# Description   : Envoi des affaires à N2F
+# Auteur        : FBO
+# Client        : MASTER GRID
+#----------------------------------------------------------------------------------------------------
+# Copyright (c) 4CAD ERP
+#----------------------------------------------------------------------------------------------------
+# Modifications : 4CAD20230605FBO
+# Modifications : 4CAD20240524HBE
+#----------------------------------------------------------------------------------------------------
+#*!
+Gosub INIT
+Gosub EXEC
+
+End
+
+#----------------------------------------------------------------------------------------------------
+# Fonction      : ACTION
+# Description   : Routage des actions superviseur des modèles de gestion
+# Modifications :
+#----------------------------------------------------------------------------------------------------
+$ACTION
+#----------------------------------------------------------------------------------------------------
+    Case [L]ACTION
+        When "INIT" : Gosub INIT
+        When "INIT_DIA" : Gosub INIT_DIA
+        When "EXEC" : Gosub EXEC
+    Endcase
+Return
+
+#----------------------------------------------------------------------------------------------------
+# Fonction      : INIT
+# Description   : En tout début de modèle
+# Modifications :
+#----------------------------------------------------------------------------------------------------
+$INIT
+#----------------------------------------------------------------------------------------------------
+    Local Tinyint ZOUVTRACE
+    Local Char ZSYMBOLE(100), ZTIT(200), ZSOCIETE_MG(50), ZSOCIETE_MS(50), ZSOCIETE_MGH(50), ZSOCIETE_SH(50), ZSOCIETE(50), ZNOMSOCIETE(10) #4CAD20240515HBE
+    Local Char ZPIMDES1(100), ZPIMDES2(100)
+    Local Clbfile ZTOKEN, ZCODE, ZNAME
+    Local Integer ZNB, ZCPT_GET, ZCPT_POST, ZLIMITE_POST, ZHEURE
+
+    If !clalev([F:ZPJM])    Local File OPPORPJM     [ZPJM]    Endif
+    If !clalev([F:ZPJT])    Local File PJMTSK       [ZPJT]    Endif
+    If !clalev([F:ZOPP])    Local File OPPOR        [ZOPP]    Endif
+    If !clalev([F:ZOPJ])    Local File OPPORPJM     [ZOPJ]    Endif   # <4CAD20201126>
+    If !clalev([F:ZN2F])    Local File ZN2FPJT      [ZN2F]    Endif
+
+    #-- Limite du nb de requête par N2F selon l'heure --#
+    [L]ZHEURE = val(format$("D:hh", date$))
+    If [L]ZHEURE < 6 or [L]ZHEURE >= 20 Then
+        [L]ZLIMITE_POST = 50
+    Else
+        [L]ZLIMITE_POST = 10
+    Endif
+Return
+
+#----------------------------------------------------------------------------------------------------
+# Fonction      : INIT_DIA
+# Description   :
+#----------------------------------------------------------------------------------------------------
+$INIT_DIA
+#----------------------------------------------------------------------------------------------------
+
+Return
+
+#----------------------------------------------------------------------------------------------------
+# Fonction      : EXEC
+# Description   : Lorsque les contrôles sont bons, pour écrire le traitement procédural
+# Modifications :
+#----------------------------------------------------------------------------------------------------
+$EXEC
+#----------------------------------------------------------------------------------------------------
+    #--------------
+    # Fichier Trace
+    #--------------
+    [L]ZTIT = "Export des données affaires vers N2F"
+
+    If !GSERVEUR : Call OUVRE_TRACE([L]ZTIT) From LECFIC : Endif
+    Call ECR_TRACE([L]ZTIT, 0) From GESECRAN
+    Call ECR_TRACE(string$(80, "-"), 0) From GESECRAN
+
+    #----------------------------------------
+    #-- Contrôle traitement non déjà lancé
+    #----------------------------------------
+    [L]ZSYMBOLE = "ZEXPN2F"
+    Lock =[L]ZSYMBOLE
+    If fstat Then
+        Call ECR_TRACE("Traitement déjà en cours...", -1) From GESECRAN
+        Goto ZFINTRT
+    Endif
+
+    #----------------------------------------
+    #-- Traitement
+    #----------------------------------------
+    Gosub TRAITEMENT
+
+    Call ECR_TRACE(num$([L]ZNB) + " lignes traitées", 0) From GESECRAN
+
+$ZFINTRT
+    If !GSERVEUR Then
+        Call FERME_TRACE From LECFIC
+        Call LEC_TRACE  From LECFIC
+    Endif
+Return
+
+###################################################################"
+$TRAITEMENT
+    #-- Récupération du token --#
+    If func GET_TOKEN([L]ZTOKEN) <> 1 Then
+        Return
+    Endif
+
+    #-- Récupération du code société --#
+    If func GET_SOCIETE([L]ZTOKEN, [L]ZSOCIETE_MG, [L]ZSOCIETE_MS, [L]ZSOCIETE_MGH,  [L]ZSOCIETE_SH) <> 1 Then #4CAD20240524HBE
+        Return
+    Endif
+
+    If [L]ZSOCIETE_MG = "" Then
+        Call ECR_TRACE("Societé MG non trouvée sur N2F", 0) From GESECRAN
+    Endif
+
+    If [L]ZSOCIETE_MS = "" Then
+        Call ECR_TRACE("Societé MS non trouvée sur N2F", 0) From GESECRAN
+    Endif
+
+    If [L]ZSOCIETE_MGH = "" Then
+        Call ECR_TRACE("Societé MGH non trouvée sur N2F", 0) From GESECRAN
+    Endif
+#<4CAD20240515HBE
+    If [L]ZSOCIETE_SH = "" Then
+        Call ECR_TRACE("Societé SH non trouvée sur N2F", 0) From GESECRAN
+    Endif
+#4CAD20240515HBE>
+    Call ECR_TRACE("", 0) From GESECRAN
+
+    #-- Récupération des projets existants chez N2F --#
+    Trbegin [F:ZN2F]
+
+    Delete [F:ZN2F] Where 1=1
+
+    If [L]ZSOCIETE_MG <> "" Then
+        If func GET_PROJECTS([L]ZTOKEN, [L]ZSOCIETE_MG) <> 1 Then
+            Return
+        Endif
+    Endif
+
+    If [L]ZSOCIETE_MS <> "" Then
+        If func GET_PROJECTS([L]ZTOKEN, [L]ZSOCIETE_MS) <> 1 Then
+            Return
+        Endif
+    Endif
+
+    If [L]ZSOCIETE_MGH <> "" Then
+        If func GET_PROJECTS([L]ZTOKEN, [L]ZSOCIETE_MGH) <> 1 Then
+            Return
+        Endif
+    Endif
+#<4CAD20240515HBE
+    If [L]ZSOCIETE_SH <> "" Then
+        If func GET_PROJECTS([L]ZTOKEN, [L]ZSOCIETE_SH) <> 1 Then
+            Return
+        Endif
+    Endif
+#4CAD20240515HBE>
+    Commit
+
+#    For [F:ZN2F]
+#        Call ECR_TRACE([F:ZN2F]ZCODE, 0) From GESECRAN
+#        Call ECR_TRACE([F:ZN2F]ZNAME, 0) From GESECRAN
+#    Next
+
+    #-- Compteurs de requêtes (50 POST / 200 GET par minutes max) --#
+    [L]ZCPT_POST = 1
+
+    # Sélection des tâches T300 [Voyages et invitations] T510 [supervision] TMIG et IXXX non soldées
+    # des affaires en cours pour le site MG038
+    Link [F:ZPJT] With [F:ZPJM]OPPPJM0 = [F:ZPJT]OPPNUM,
+&                    [F:ZOPP]OPP0 = [F:ZPJT]OPPNUM,
+&                    [F:ZOPJ]OPPPJM0 = [F:ZPJT]OPPNUM
+&        As [ZLNK]
+&        Where ([F:ZPJT]TASCOD = "T300" or [F:ZPJT]TASCOD = "T510" or [F:ZPJT]TASCOD = "TMIG" or left$([F:ZPJT]TASCOD, 1) = "I" or left$([F:ZPJT]TASCOD, 3) = "T71")
+&           and [F:ZPJT]TASSTATE <> 4 and [F:ZPJM]OPPSTATE <> 4 and [F:ZPJM]OPPSTATE <> 9 and [F:ZOPJ]OPPMOD <> 2
+&        Order By [F:ZPJT]KEYCONCAT
+
+    For [F:ZLNK]
+        # Libellé affaire
+        Raz ZPIMDES1
+        Call LECTEXTRA(ZPIMDES1,"PIMPL","PIMDESAXX",[ZPJT]OPPNUM,"") From ATEXTRA
+
+        # Libellé tâche
+        Raz ZPIMDES2
+        Call LECTEXTRA(ZPIMDES2,"PIMPL","PIMDESAXX",[ZPJT]OPPNUM+"!"+[ZPJT]TASCOD,"") From ATEXTRA
+
+        #-- Préparation des deux champs à envoyer --#
+        [L]ZCODE = [F:ZPJT]KEYCONCAT + "/"
+&                  + [F:ZPJM]CCE(0) + "/"
+&                  + [F:ZPJM]CCE(1) + "/"
+&                  + [F:ZPJM]CCE(2) + "/"
+&                  + [F:ZPJM]CCE(3) + "/"
+&                  + [F:ZPJM]CCE(4)
+
+        [L]ZNAME = [L]ZPIMDES1 - "-" - [L]ZPIMDES2
+
+        Raz [L]ZSOCIETE, [L]ZNOMSOCIETE
+        If left$([F:ZPJT]KEYCONCAT, 5) = "AFFMG" & left$([F:ZPJT]KEYCONCAT, 6) <> "AFFMGH" Then
+            [L]ZSOCIETE = [L]ZSOCIETE_MG
+            [L]ZNOMSOCIETE = "MG"
+        Elsif left$([F:ZPJT]KEYCONCAT, 5) = "AFFMS" Then
+            [L]ZSOCIETE = [L]ZSOCIETE_MS
+            [L]ZNOMSOCIETE = "MS"
+        Elsif left$([F:ZPJT]KEYCONCAT, 6) = "AFFMGH" Then
+            [L]ZSOCIETE = [L]ZSOCIETE_MGH
+            [L]ZNOMSOCIETE = "MGH"
+        Elsif left$([F:ZPJT]KEYCONCAT, 5) = "AFFSH" Then #<4CAD20240515HBE
+            [L]ZSOCIETE = [L]ZSOCIETE_SH
+            [L]ZNOMSOCIETE = "SH"                         #4CAD20240515HBE>
+        Endif
+
+        Call ECR_TRACE("Code : " + [L]ZCODE, 0) From GESECRAN
+        Call ECR_TRACE("Name : " + [L]ZNAME, 0) From GESECRAN
+
+        If [L]ZSOCIETE = "" Then
+            Call ECR_TRACE("Société : non gérée par l'export", 0) From GESECRAN
+        Else
+            Call ECR_TRACE("Société : " + [L]ZNOMSOCIETE, 0) From GESECRAN
+
+            #-- Si le code est déjà présent chez N2F, on ne renvoie pas --#
+            Read [F:ZN2F]ZN2F0 = [L]ZCODE
+            If fstat = 0 Then
+                Call ECR_TRACE("Ligne existante", 0) From GESECRAN
+            Else
+                #-- Appel du WS de création --#
+                If func POST_PROJECT([L]ZTOKEN, [L]ZSOCIETE, [L]ZCODE, [L]ZNAME) = 1 Then
+                    Call ECR_TRACE(time$ + " - Ligne créée", 0) From GESECRAN
+                Endif
+
+                [L]ZNB += 1
+
+                #-- Si on dépasse le nombre de requête POST on attends une minute max pour ne pas être bloqués --#
+                [L]ZCPT_POST += 1
+                If [L]ZCPT_POST >= [L]ZLIMITE_POST Then
+                    Sleep(60)
+                    [L]ZCPT_POST = 0
+                Endif
+            Endif
+        Endif
+        Call ECR_TRACE("", 0) From GESECRAN
+
+        If [L]ZNB >= 20000 Then
+            Break
+        Endif
+    Next
+Return
+
+################################################################
+# GET_TOKEN : Récupère le token de connexion sur N2F qui va être envoyé à chaque appel (Bear Token)
+################################################################
+Funprog GET_TOKEN(ZTOKEN)
+    Variable Clbfile ZTOKEN
+
+    Local Integer ZSTATUS
+    Local Char ZNAME(250)
+    Local Char ZMETHOD(10)
+    Local Char ZSUBURL(100)
+    Local Char ZPCOD(250)(1..)
+    Local Clbfile ZPVAL(250)(1..)
+    Local Char ZHCOD(250)(1..)
+    Local Clbfile ZHVAL(10)(1..)
+    Local Clbfile ZDATA
+    Local Clbfile ZRESHEAD
+    Local Clbfile ZRESBODY
+
+    Local Char ZJCOD(250)(1..)
+    Local Clbfile ZJVAL(10)(1..)
+
+    Raz [L]ZTOKEN
+
+    [L]ZNAME = "N2F"
+    [L]ZMETHOD = "POST"
+    [L]ZSUBURL = "services/api/v2/auth"
+
+    [L]ZHCOD(1) = "Content-Type"
+    [L]ZHVAL(1) = "application/json; charset=utf-8"
+
+    [L]ZJCOD(1) = "client_id"
+    #[L]ZJVAL(1) = "20230223-154344_WEB_599320b408b147b680081ebc5e862283"
+    [L]ZJVAL(1) = func AFNC.PARAM("ZN2FID", "")
+
+    [L]ZJCOD(2) = "client_secret"
+    #[L]ZJVAL(2) = "yo8k26SPPQp$lw8bQttq7uy%%v-%1ufPDn#NrG1Xa8B2IT~k"
+    [L]ZJVAL(2) = func AFNC.PARAM("ZN2FSECRET", "")
+
+    [L]ZDATA = func ZWSUTIL.GET_JSON(ZJCOD, ZJVAL, 1)
+
+    [L]ZSTATUS = func ZWSUTIL.APPEL_WS([L]ZNAME, [L]ZMETHOD, [L]ZSUBURL, [L]ZHCOD, [L]ZHVAL, [L]ZPCOD, [L]ZPVAL, [L]ZDATA, [L]ZRESHEAD, [L]ZRESBODY)
+
+    If [L]ZSTATUS = 200 Then
+        [L]ZSTATUS = 1
+        [L]ZTOKEN = func ZWSUTIL.JSON_GET_VALEUR(ZRESBODY, "response", "token", "")
+        If [L]ZTOKEN = "" Then
+            Call ECR_TRACE("Erreur lors de la récupération du token : réponse vide", 1) From GESECRAN
+            [L]ZSTATUS = 0
+        Endif
+    Else
+        Call ECR_TRACE("Erreur lors de la récupération du token (" + num$(ZSTATUS) + ")", 1) From GESECRAN
+        [L]ZSTATUS = 0
+    Endif
+End [L]ZSTATUS
+
+################################################################
+# GET_SOCIETE : Récupération du code société à intégrer dans les WS
+################################################################
+Funprog GET_SOCIETE(ZTOKEN, ZSOCIETE_MG, ZSOCIETE_MS, ZSOCIETE_MGH, ZSOCIETE_SH)  #4CAD20240515HBE
+    Value Clbfile ZTOKEN
+    Variable Char ZSOCIETE_MG
+    Variable Char ZSOCIETE_MS
+    Variable Char ZSOCIETE_MGH
+    Variable Char ZSOCIETE_SH   #4CAD20240515HBE
+
+    Local Integer ZSTATUS
+    Local Char ZNAME(250)
+    Local Char ZMETHOD(10)
+    Local Char ZSUBURL(100)
+    Local Char ZPCOD(250)(1..)
+    Local Clbfile ZPVAL(250)(1..)
+    Local Char ZHCOD(250)(1..)
+    Local Clbfile ZHVAL(10)(1..)
+    Local Clbfile ZDATA
+    Local Clbfile ZRESHEAD
+    Local Clbfile ZRESBODY
+
+    Raz [L]ZSOCIETE_MG, [L]ZSOCIETE_MS
+
+    [L]ZNAME = "N2F"
+    [L]ZMETHOD = "GET"
+    [L]ZSUBURL = "services/api/v2/companies"
+
+    [L]ZHCOD(1) = "Content-Type"
+    [L]ZHVAL(1) = "application/json; charset=utf-8"
+    [L]ZHCOD(2) = "Authorization"
+    [L]ZHVAL(2) = "Bearer " + [L]ZTOKEN
+
+    [L]ZDATA = "{}"
+
+    [L]ZSTATUS = func ZWSUTIL.APPEL_WS([L]ZNAME, [L]ZMETHOD, [L]ZSUBURL, [L]ZHCOD, [L]ZHVAL, [L]ZPCOD, [L]ZPVAL, [L]ZDATA, [L]ZRESHEAD, [L]ZRESBODY)
+    If [L]ZSTATUS = 200 Then
+        [L]ZSTATUS = 1
+#<4CAD20240515HBE
+        [L]ZSOCIETE_MG = func JSON_GET_SOCIETE(ZRESBODY, "MASTERGRID")
+        If [L]ZSOCIETE_MG = "" Then
+            [L]ZSOCIETE_MG = func JSON_GET_SOCIETE(ZRESBODY, "MASTERGRID [TEST]")
+        Endif
+        [L]ZSOCIETE_MS = func JSON_GET_SOCIETE(ZRESBODY, "MG SERVICES")
+        If [L]ZSOCIETE_MS = "" Then
+            [L]ZSOCIETE_MS = func JSON_GET_SOCIETE(ZRESBODY, "MG SERVICES [TEST]")
+        Endif
+        [L]ZSOCIETE_MGH = func JSON_GET_SOCIETE(ZRESBODY, "MG HOLDING")
+        If [L]ZSOCIETE_MGH = "" Then
+            [L]ZSOCIETE_MGH = func JSON_GET_SOCIETE(ZRESBODY, "MG HOLDING [TEST]")
+        Endif
+        [L]ZSOCIETE_SH = func JSON_GET_SOCIETE(ZRESBODY, "SHB")
+        If [L]ZSOCIETE_SH = "" Then
+            [L]ZSOCIETE_SH = func JSON_GET_SOCIETE(ZRESBODY, "SHB [TEST]")
+        Endif
+#4CAD20240515HBE>
+    Else
+        Call ECR_TRACE("Erreur lors de la récupération du code société (" + num$([L]ZSTATUS) + ")", 1) From GESECRAN
+        [L]ZSTATUS = 0
+    Endif
+End [L]ZSTATUS
+
+################################################################
+# GET_PROJECTS : Récupération des projets présents chez N2F
+################################################################
+Funprog GET_PROJECTS(ZTOKEN, ZSOCIETE)
+    Value Clbfile ZTOKEN
+    Variable Char ZSOCIETE
+
+    Local Integer ZNB, ZCPT
+    Local Integer ZSTATUS
+    Local Char ZNAME(250)
+    Local Char ZMETHOD(10)
+    Local Char ZSUBURL(100), ZSUBURL2(100)
+    Local Char ZPCOD(250)(1..)
+    Local Clbfile ZPVAL(250)(1..)
+    Local Char ZHCOD(250)(1..)
+    Local Clbfile ZHVAL(10)(1..)
+    Local Clbfile ZDATA
+    Local Clbfile ZRESHEAD
+    Local Clbfile ZRESBODY
+
+    [L]ZNAME = "N2F"
+    [L]ZMETHOD = "GET"
+    [L]ZSUBURL = "services/api/v2/companies/" + [L]ZSOCIETE + "/axes/projects"
+
+    [L]ZHCOD(1) = "Content-Type"
+    [L]ZHVAL(1) = "application/json; charset=utf-8"
+    [L]ZHCOD(2) = "Authorization"
+    [L]ZHVAL(2) = "Bearer " + [L]ZTOKEN
+
+    [L]ZDATA = "{}"
+
+
+
+    [L]ZNB = 200
+    [L]ZCPT = 0
+    While [L]ZNB = 200 & ZCPT < 50
+        [L]ZSUBURL2 = [L]ZSUBURL + "?limit=200&start=" + num$(200 * [L]ZCPT)
+
+        [L]ZSTATUS = func ZWSUTIL.APPEL_WS([L]ZNAME, [L]ZMETHOD, [L]ZSUBURL2, [L]ZHCOD, [L]ZHVAL, [L]ZPCOD, [L]ZPVAL, [L]ZDATA, [L]ZRESHEAD, [L]ZRESBODY)
+        If [L]ZSTATUS = 200 Then
+            [L]ZSTATUS = 1
+            [L]ZNB = func WRITE_PROJECTS_X3([L]ZRESBODY, [L]ZSOCIETE)
+        Else
+            Call ECR_TRACE("Erreur lors de la récupération des projets (" + num$([L]ZSTATUS) + ")", 1) From GESECRAN
+            [L]ZSTATUS = 0
+        Endif
+
+        [L]ZCPT += 1
+    Wend
+
+End [L]ZSTATUS
+
+################################################################
+# GET_PROJECTS : Récupération des projets présents chez N2F
+################################################################
+Funprog POST_PROJECT(ZTOKEN, ZSOCIETE, ZCODE, ZLIBELLE)
+    Value Clbfile ZTOKEN
+    Value Char ZSOCIETE
+    Value Clbfile ZCODE
+    Value Clbfile ZLIBELLE
+
+    Local Integer ZSTATUS
+    Local Char ZNAME(250)
+    Local Char ZMETHOD(10)
+    Local Char ZSUBURL(100)
+    Local Char ZPCOD(250)(1..)
+    Local Clbfile ZPVAL(250)(1..)
+    Local Char ZHCOD(250)(1..)
+    Local Clbfile ZHVAL(10)(1..)
+    Local Clbfile ZDATA
+    Local Clbfile ZRESHEAD
+    Local Clbfile ZRESBODY
+
+    Local Char ZJCOD(250)(1..)
+    Local Clbfile ZJVAL(10)(1..)
+    Local Clbfile ZJSON
+
+    [L]ZNAME = "N2F"
+    [L]ZMETHOD = "POST"
+    [L]ZSUBURL = "services/api/v2/companies/" + [L]ZSOCIETE + "/axes/projects"
+
+    [L]ZHCOD(1) = "Content-Type"
+    [L]ZHVAL(1) = "application/json; charset=utf-8"
+    [L]ZHCOD(2) = "Authorization"
+    [L]ZHVAL(2) = "Bearer " + [L]ZTOKEN
+
+    [L]ZJCOD(1) = "culture"
+    [L]ZJVAL(1) = "fr"
+    [L]ZJCOD(2) = "value"
+    [L]ZJVAL(2) = escJson([L]ZLIBELLE)
+    [L]ZJSON = func ZWSUTIL.GET_JSON(ZJCOD, ZJVAL, 1)
+
+    [L]ZJCOD(1) = "code"
+    [L]ZJVAL(1) = '"' + [L]ZCODE + '"'
+    [L]ZJCOD(2) = "names"
+    [L]ZJVAL(2) = "[" + [L]ZJSON + "]"
+    [L]ZDATA = func ZWSUTIL.GET_JSON(ZJCOD, ZJVAL, 0)
+
+    [L]ZSTATUS = func ZWSUTIL.APPEL_WS([L]ZNAME, [L]ZMETHOD, [L]ZSUBURL, [L]ZHCOD, [L]ZHVAL, [L]ZPCOD, [L]ZPVAL, [L]ZDATA, [L]ZRESHEAD, [L]ZRESBODY)
+
+    If find([L]ZSTATUS, 200, 201) > 0 Then
+        [L]ZSTATUS = 1
+        If func ZWSUTIL.JSON_GET_VALEUR(ZRESBODY, "success", "", "") <> "true"
+            Call ECR_TRACE(time$ + " - Erreur lors de la création (" + num$([L]ZSTATUS) + ")", 1) From GESECRAN
+            Call WRITE_JSON_IN_TMP(ZRESHEAD) From ZWSUTIL
+            Call WRITE_JSON_IN_TMP(ZRESBODY) From ZWSUTIL
+            [L]ZSTATUS = 0
+        Endif
+    Else
+        Call ECR_TRACE(time$ + " - Erreur lors de la création (" + num$([L]ZSTATUS) + ")", 1) From GESECRAN
+        Call WRITE_JSON_IN_TMP(ZRESHEAD) From ZWSUTIL
+        Call WRITE_JSON_IN_TMP(ZRESBODY) From ZWSUTIL
+        [L]ZSTATUS = 0
+    Endif
+
+End [L]ZSTATUS
+
+################################################################
+# WRITE_PROJECTS : Parse le résultat et enregistre les données
+################################################################
+Funprog WRITE_PROJECTS_X3(ZBODY, ZSOCIETE)
+    Value Clbfile ZBODY
+    Variable Char ZSOCIETE
+
+    Local Char ZN1(100) : [L]ZN1 = "response"
+    Local Char ZN2(100) : [L]ZN2 = "data"
+
+    Local Integer ZNB
+    Local Integer ZSTATUS
+    Local Clbfile ZRESULTAT(250)
+    Local Instance ZNODES(1..)  Using C_ASYRJSO
+    Local Instance ZNODE        Using C_ASYRJSO
+    Local Instance ZNODE_L2        Using C_ASYRJSO
+    Local Instance ZNODE_L3        Using C_ASYRJSO
+
+    Local File ZN2FPJT [ZN2F]
+
+    ZSTATUS = [V]CST_AERROR
+    ZSTATUS = func ASYRJSONPARSE.PARSEJSON(GACTX, ZBODY, ZNODES, ZNODE)
+
+
+
+    If [L]ZSTATUS = [V]CST_AOK Then
+        While (ZNODE <> null)
+            If ZNODE.PRO = ZN1 Then
+                If ZN2 = "" Then
+                    ZRESULTAT = fmet ZNODE.AGETCNT()
+                    Break
+                Else
+                    ZNODE_L2 = ZNODE.SUB
+
+                    While (ZNODE_L2 <> null)
+                        If ZNODE_L2.PRO = ZN2 Then
+
+                                ZNODE_L3 = ZNODE_L2.SUB
+
+                                While(ZNODE_L3 <> null)
+                                    Raz [F:ZN2F]
+
+                                    [F:ZN2F]ZCODE = func NETTOIE(fmet ZNODE_L3.SUB.AGETCNT)
+                                    [F:ZN2F]ZNAME = func NETTOIE(fmet ZNODE_L3.SUB.NEX.SUB.SUB.NEX.AGETCNT)
+                                    #[F:ZN2F]ZSOCIETE = [L]ZSOCIETE
+                                    [L]ZNB += 1
+
+                                    Write [F:ZN2F]
+                                    If fstat Then
+                                        Call ECR_TRACE("Erreur lors de la récupération des projets existants", 1) From GESECRAN
+                                        Rollback
+                                        End
+                                    Endif
+
+                                    ZNODE_L3 = ZNODE_L3.NEX
+                                Wend
+                            Endif
+
+                        ZNODE_L2 = ZNODE_L2.NEX
+                    Wend
+                Endif
+            Endif
+
+            ZNODE = ZNODE.NEX
+        Wend
+    Endif
+
+End [L]ZNB
+
+#################################################################
+Funprog NETTOIE(ZCHAINE)
+    Value Char ZCHAINE
+
+    If left$(ZCHAINE, 1) = '"' Then
+        ZCHAINE = right$(ZCHAINE, 2)
+    Endif
+
+    If right$(ZCHAINE, len(ZCHAINE)) = '"' Then
+        ZCHAINE = left$(ZCHAINE, len(ZCHAINE) - 1)
+    Endif
+End ZCHAINE
+
+#################################################################
+Funprog JSON_GET_SOCIETE(ZBODY, ZSOCIETE)
+    Value Clbfile ZBODY
+    Value Char ZSOCIETE
+
+    Local Char ZN1(30) : [L]ZN1 = "response"
+    Local Char ZN2(30) : [L]ZN2 = "data"
+
+    Local Char ZNAME(100), ZUUID(100)
+
+    Local Integer ZSTATUS
+    Local Clbfile ZRESULTAT(250)
+    Local Instance ZNODES(1..)  Using C_ASYRJSO
+    Local Instance ZNODE        Using C_ASYRJSO
+    Local Instance ZNODE_L2        Using C_ASYRJSO
+    Local Instance ZNODE_L3        Using C_ASYRJSO
+    Local Instance ZNODE_L4        Using C_ASYRJSO
+    Local Instance ZNODE_L5        Using C_ASYRJSO
+
+    ZSTATUS = [V]CST_AERROR
+    ZSTATUS = func ASYRJSONPARSE.PARSEJSON(GACTX, ZBODY, ZNODES, ZNODE)
+
+    If [L]ZSTATUS = [V]CST_AOK Then
+        While (ZNODE <> null)
+            If ZNODE.PRO = ZN1 Then
+                If ZN2 = "" Then
+                    ZRESULTAT = fmet ZNODE.AGETCNT()
+                    Break
+                Else
+                    ZNODE_L2 = ZNODE.SUB
+                    While (ZNODE_L2 <> null)
+
+                        If ZNODE_L2.PRO = ZN2 Then
+                            ZNODE_L3 = ZNODE_L2.SUB
+
+                            While (ZNODE_L3 <> null)
+                                Raz [L]ZNAME, [L]ZUUID
+
+                                ZNODE_L4 = ZNODE_L3.SUB
+
+                                While (ZNODE_L4 <> null)
+                                    If ZNODE_L4.PRO = "name" Then
+                                        [L]ZNAME = func NETTOIE(unescJson(fmet ZNODE_L4.AGETCNT()))
+                                    Endif
+                                    If ZNODE_L4.PRO = "uuid" Then
+                                        [L]ZUUID = func NETTOIE(unescJson(fmet ZNODE_L4.AGETCNT()))
+                                    Endif
+                                    ZNODE_L4 = ZNODE_L4.NEX
+                                Wend
+
+                                If [L]ZNAME = [L]ZSOCIETE Then
+                                    [L]ZRESULTAT = [L]ZUUID
+                                Endif
+
+                                ZNODE_L3 = ZNODE_L3.NEX
+                            Wend
+                        Endif
+                        ZNODE_L2 = ZNODE_L2.NEX
+                    Wend
+                Endif
+            Endif
+
+            ZNODE = ZNODE.NEX
+        Wend
+    Endif
+
+    If left$(ZRESULTAT, 1) = '"' Then
+        ZRESULTAT = right$(ZRESULTAT, 2)
+    Endif
+
+    If right$(ZRESULTAT, len(ZRESULTAT)) = '"' Then
+        ZRESULTAT = left$(ZRESULTAT, len(ZRESULTAT) - 1)
+    Endif
+
+End ZRESULTAT

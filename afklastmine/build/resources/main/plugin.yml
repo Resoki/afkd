@@ -1,0 +1,61 @@
+name: afkminingFINAL
+version: '1.0-SNAPSHOT'
+main: fr.resoki.afkmining.Afkmining.afkminingFINAL.AfkminingFINAL
+api-version: '1.21'
+dependencies:
+  server:
+    DecentHolograms:
+      load: BEFORE
+      required: false # This is the default when not present
+commands:
+  ping:
+    description: Reply Pong
+    usage: /<ping>
+  reloadafkmining:
+    description: reload plugin
+    usage: /reloadafkmining
+  auto:
+    description: Activates automatic block breaking.
+    usage: /<auto>
+  rebirth:
+    description: Rebirth system.
+    usage: /<rebirth>
+  rebirthmax:
+    description: rebirth max
+    usage: /rebirthmax
+  givemultiplier:
+    description: givemultiplier
+    usage: /<command> [player] [add|remove|set|reset] [multiplier]
+  upgrade:
+    description: upgrade
+    usage: /upgrade
+  rebirthpoints:
+    description: rebirth points
+    usage: /rebirthpoints
+  rebirthshop:
+    description: rebirth shop
+    usage: /rebirthshop
+  daily:
+    description: claim daily
+    usage: /daily
+  tiers:
+    description: pass tiers
+    usage: /tiers
+  multiplytop:
+    description: t
+    usage: /multiplytop
+  leveltop:
+     description: t
+     usage: /leveltop
+  factory:
+    description: t
+    usage: /factory
+  worker:
+    description: t
+    usage: /worker
+  hide:
+    description: t
+    usage: /factory
+  autorebirth:
+    description: Toggles autorebirth system.
+    usage: /autorebirth
